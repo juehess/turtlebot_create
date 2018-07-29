@@ -1,9 +1,29 @@
-#!/usr/bin/env python
+from setuptools import find_packages
+from setuptools import setup
 
-from distutils.core import setup
-from catkin_pkg.python_setup import generate_distutils_setup
+package_name = 'create_driver'
 
-d = generate_distutils_setup(packages=['create_driver'],
-                             package_dir={'': 'src'})
+setup(
+    name=package_name,
+    version='2.3.1',
+    packages=['create_driver'],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    author='Daemon Kohler',
+    author_email='damonkohler@google.com',
+    keywords=['ROS2', 'iRobot Create', 'turtlebot'],
+    description=(
+"""
+    Driver for iRobot Create and Roomba
 
-setup(**d)
+    This is a generic driver for iRobot Create that currently holds
+    implementations for Turtlebot and Roomba. Port
+    of pyrobot.py by Damon Kohler.  It is currently labeled as
+    turtlebot_driver pending review by the entire create community
+    before using the name create_driver.
+
+    For ROS bindings, please see turtlebot_node.
+"""
+    ),
+    license='MIT',
+)

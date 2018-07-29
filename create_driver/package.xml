@@ -1,4 +1,4 @@
-<package>
+<package format="2">
   <name>create_driver</name>
   <version>2.3.1</version>
   <description>
@@ -14,16 +14,17 @@
   </description>
   <maintainer email="turtlebot@osrfoundation.org">OSRF</maintainer>
   <license>MIT</license>
+
   <url type="website">http://ros.org/wiki/create_driver</url>
   <url type="repository">https://github.com/turtlebot/turtlebot_create</url>
   <url type="bugtracker">https://github.com/turtlebot/turtlebot_create/issues</url>
+
   <author email="damonkohler@google.com">Daemon Kohler</author>
   <author email="kwc@kwc.org">Ken Conley</author>
   <author email="mwise@willowgarage.com">Melonee Wise</author>
 
-  <buildtool_depend>catkin</buildtool_depend>
-
   <export>
-    <rosdoc config="rosdoc.yaml" />
+    <!-- <rosdoc config="rosdoc.yaml" /> -->
+    <build_type>ament_python</build_type>
   </export>
 </package>

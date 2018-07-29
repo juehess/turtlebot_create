@@ -25,8 +25,6 @@
 # Modified for use in ROS by Ken Conley. API names have been modified
 # for consistency ROS Python coding guidelines.
 
-from __future__ import with_statement
-
 """iRobot Roomba Serial control Interface (SCI) and Turtlebot Open Interface (OI).
 
 turtlebot.py is a fork of PyRobot.
@@ -52,7 +50,6 @@ import struct
 import time
 import threading
 import traceback
-import rospy
 
 ROOMBA_OPCODES = dict(
     start = 128,
