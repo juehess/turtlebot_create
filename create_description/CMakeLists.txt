@@ -1,11 +1,19 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(create_description)
 
-find_package(catkin REQUIRED)
+find_package(ament_cmake_auto REQUIRED)
+find_package(ament_cmake_ros REQUIRED)
 
-catkin_package(CATKIN_DEPENDS urdf xacro)
+# install meshes into share/create_description
+install(
+  DIRECTORY meshes
+  DESTINATION share/${PROJECT_NAME}
+)
 
-install(DIRECTORY meshes
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
-install(DIRECTORY urdf
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+# install URDF into share/create_description
+install(
+  DIRECTORY urdf
+  DESTINATION share/${PROJECT_NAME}
+)
+
+ament_auto_package()
