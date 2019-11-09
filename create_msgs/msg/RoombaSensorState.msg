@@ -1,4 +1,4 @@
-Header header
+std_msgs/Header header
 
 uint8 CHARGING_NOT_CHARGING = 0
 uint8 CHARGING_CHARGING_RECOVERY = 1

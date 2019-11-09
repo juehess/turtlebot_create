@@ -26,8 +26,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import create_sensor_handler
-import roomba_sensor_handler
+from create_node.create_sensor_handler import CreateSensorHandler
+from create_node.roomba_sensor_handler import RoombaSensorHandler
 
 __author__ = 'moesenle@in.tum.de (Lorenz Moesenlechner)'
 
@@ -41,8 +41,8 @@ class RobotType(object):
 
     
 ROBOT_TYPES = {
-    'create': RobotType('create', 57600, create_sensor_handler.CreateSensorHandler,
+    'create': RobotType('create', 57600, CreateSensorHandler,
                         wheel_separation=0.26),
-    'roomba': RobotType('roomba', 115200, roomba_sensor_handler.RoombaSensorHandler,
+    'roomba': RobotType('roomba', 115200, RoombaSensorHandler,
                         wheel_separation=0.235),
     }

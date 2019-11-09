@@ -33,14 +33,15 @@
 #
 # Revision $Id: __init__.py 11217 2010-09-23 21:08:11Z kwc $
 
-import roslib; roslib.load_manifest('create_node')
+# TODO(allenh1): whaaaaat
+# import roslib; roslib.load_manifest('create_node')
 
 """
 ROS Turtlebot node for ROS built on top of create_driver's
-turtlebot implementation. This driver is based on 
+turtlebot implementation. This driver is based on
 otl_roomba by OTL (otl-ros-pkg).
 
-create_driver's turtlebot implementation is based on 
+create_driver's turtlebot implementation is based on
 Damon Kohler's pyrobot.py.
 """
 
@@ -53,35 +54,33 @@ import time
 
 from math import sin, cos
 
-import rospkg
-import rospy
-import tf
+# TODO(allenh1): is this needed for something?
+# import rospkg
+import rclpy
+from rclpy.node import Node
+from rclpy.time import Time
+from rclpy.duration import Duration
+import tf2_ros
 
 from geometry_msgs.msg import Point, Pose, Pose2D, PoseWithCovariance, \
-    Quaternion, Twist, TwistWithCovariance, Vector3
+    Quaternion, Twist, TwistWithCovariance, Vector3, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 
 from create_driver import Turtlebot, MAX_WHEEL_SPEED, DriverError
-from create_node.msg import TurtlebotSensorState, Drive, Turtle
-from create_node.srv import SetTurtlebotMode,SetTurtlebotModeResponse, SetDigitalOutputs, SetDigitalOutputsResponse
+from create_msgs.msg import TurtlebotSensorState, Drive, Turtle
+from create_msgs.srv import SetTurtlebotMode, SetDigitalOutputs
 from create_node.diagnostics import TurtlebotDiagnostics
 import create_node.robot_types as robot_types
 from create_node.covariances import \
      ODOM_POSE_COVARIANCE, ODOM_POSE_COVARIANCE2, ODOM_TWIST_COVARIANCE, ODOM_TWIST_COVARIANCE2
 from create_node.songs import bonus
 
-#dynamic reconfigure
-import dynamic_reconfigure.server
-from create_node.cfg import TurtleBotConfig
-
-
-class TurtlebotNode(object):
-
-    _SENSOR_READ_RETRY_COUNT = 5 
+class TurtlebotNode(Node):
+    _SENSOR_READ_RETRY_COUNT = 5
 
     def __init__(self, default_port='/dev/ttyUSB0', default_update_rate=30.0):
-
+        super().__init__('turtlebot')
         """
         @param default_port: default tty port to use for establishing
             connection to Turtlebot.  This will be overriden by ~port ROS
@@ -95,41 +94,39 @@ class TurtlebotNode(object):
         self.sensor_state = TurtlebotSensorState()
         self.req_cmd_vel = None
 
-        rospy.init_node('turtlebot')
         self._init_params()
         self._init_pubsub()
-        
+
         self._pos2d = Pose2D() # 2D pose for odometry
 
-        self._diagnostics = TurtlebotDiagnostics()
-        if self.has_gyro:
-            from create_node.gyro import TurtlebotGyro
-            self._gyro = TurtlebotGyro()
-        else:
-            self._gyro = None
-            
-        dynamic_reconfigure.server.Server(TurtleBotConfig, self.reconfigure)
+        # self._diagnostics = TurtlebotDiagnostics()
+
+        # TODO(allenh1): Enable gyro when possible (port PyKDL)
+        # if self.has_gyro:
+        #     from create_node.gyro import TurtlebotGyro
+        #     self._gyro = TurtlebotGyro()
+        # else:
+        self._gyro = None
+        self.create_timer(1.0 / self.update_rate, self.spin)
+        # TODO(allenh1): implement parameters
+        # dynamic_reconfigure.server.Server(TurtleBotConfig, self.reconfigure)
 
     def start(self):
         log_once = True
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             try:
                 self.robot.start(self.port, robot_types.ROBOT_TYPES[self.robot_type].baudrate)
                 break
             except serial.serialutil.SerialException as ex:
-                msg = "Failed to open port %s. Error: %s Please make sure the Create cable is plugged into the computer. \n"%((self.port), ex.message)
-                self._diagnostics.node_status(msg,"error")
-                if log_once:
-                    log_once = False
-                    rospy.logerr(msg)
-                else:
-                    sys.stderr.write(msg)
+                msg = "Failed to open port %s. Error: %s Please make sure the Create cable is plugged into the computer. \n"%((self.port), ex)
+                # self._diagnostics.node_status(msg,"error")
+                self.get_logger().error(msg)
                 time.sleep(3.0)
 
-        self.sensor_handler = robot_types.ROBOT_TYPES[self.robot_type].sensor_handler(self.robot) 
+        self.sensor_handler = robot_types.ROBOT_TYPES[self.robot_type].sensor_handler(self.robot)
         self.robot.safe = True
 
-        if rospy.get_param('~bonus', False):
+        if self.declare_parameter('bonus', False).value:
             bonus(self.robot)
 
         self.robot.control()
@@ -148,52 +145,68 @@ class TurtlebotNode(object):
 
 
     def _init_params(self):
-        self.port = rospy.get_param('~port', self.default_port)
-        self.robot_type = rospy.get_param('~robot_type', 'create')
-        #self.baudrate = rospy.get_param('~baudrate', self.default_baudrate)
-        self.update_rate = rospy.get_param('~update_rate', self.default_update_rate)
-        self.drive_mode = rospy.get_param('~drive_mode', 'twist')
-        self.has_gyro = rospy.get_param('~has_gyro', True)
-        self.odom_angular_scale_correction = rospy.get_param('~odom_angular_scale_correction', 1.0)
-        self.odom_linear_scale_correction = rospy.get_param('~odom_linear_scale_correction', 1.0)
-        self.cmd_vel_timeout = rospy.Duration(rospy.get_param('~cmd_vel_timeout', 0.6))
-        self.stop_motors_on_bump = rospy.get_param('~stop_motors_on_bump', True)
-        self.min_abs_yaw_vel = rospy.get_param('~min_abs_yaw_vel', None)
-        self.max_abs_yaw_vel = rospy.get_param('~max_abs_yaw_vel', None)
-        self.publish_tf = rospy.get_param('~publish_tf', False)
-        self.odom_frame = rospy.get_param('~odom_frame', 'odom')
-        self.base_frame = rospy.get_param('~base_frame', 'base_footprint')
-        self.operate_mode = rospy.get_param('~operation_mode', 3)
+        self.port = self.declare_parameter('port', self.default_port).value
+        self.robot_type = self.declare_parameter('robot_type', 'create').value
+        self.update_rate = self.declare_parameter('update_rate', self.default_update_rate).value
+        self.drive_mode = self.declare_parameter('drive_mode', 'twist').value
+        self.has_gyro = self.declare_parameter('has_gyro', True).value
+        self.odom_angular_scale_correction = self.declare_parameter(
+            'odom_angular_scale_correction', 1.0
+        ).value
+        self.odom_linear_scale_correction = self.declare_parameter(
+            'odom_linear_scale_correction', 1.0
+        ).value
+        self.cmd_vel_timeout = Duration(
+            seconds=self.declare_parameter(
+                'cmd_vel_timeout', 0.6
+            ).value
+        )
+        self.stop_motors_on_bump = self.declare_parameter('stop_motors_on_bump', True).value
+        self.min_abs_yaw_vel = self.declare_parameter('min_abs_yaw_vel', None).value
+        self.max_abs_yaw_vel = self.declare_parameter('max_abs_yaw_vel', None).value
+        self.publish_tf = self.declare_parameter('publish_tf', True).value
+        self.odom_frame = self.declare_parameter('odom_frame', 'odom').value
+        self.base_frame = self.declare_parameter('base_frame', 'base_footprint').value
+        self.operate_mode = self.declare_parameter('operation_mode', 3).value
 
-        rospy.loginfo("serial port: %s"%(self.port))
-        rospy.loginfo("update_rate: %s"%(self.update_rate))
-        rospy.loginfo("drive mode: %s"%(self.drive_mode))
-        rospy.loginfo("has gyro: %s"%(self.has_gyro))
+        self.get_logger().info("serial port: '%s'" % (self.port))
+        self.get_logger().info("update_rate: '%s'" % (self.update_rate))
+        self.get_logger().info("drive mode: '%s'" % (self.drive_mode))
+        self.get_logger().info("has gyro: '%s'" % (self.has_gyro))
 
     def _init_pubsub(self):
-        self.joint_states_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
-        self.odom_pub = rospy.Publisher('odom', Odometry, queue_size=10)
-
-        self.sensor_state_pub = rospy.Publisher('~sensor_state', TurtlebotSensorState, queue_size=10)
-        self.operating_mode_srv = rospy.Service('~set_operation_mode', SetTurtlebotMode, self.set_operation_mode)
-        self.digital_output_srv = rospy.Service('~set_digital_outputs', SetDigitalOutputs, self.set_digital_outputs)
-
+        # create publishers
+        self.joint_states_pub = self.create_publisher(JointState, 'joint_states', 10)
+        self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
+        self.sensor_state_pub = self.create_publisher(TurtlebotSensorState, 'sensor_state', 10)
+        # create services
+        self.operating_mode_srv = self.create_service(
+            SetTurtlebotMode,
+            'set_operation_mode',
+            self.set_operation_mode
+        )
+        self.digital_output_srv = self.create_service(
+            SetDigitalOutputs,
+            'set_digital_outputs',
+            self.set_digital_outputs
+        )
+        # create subscribers
         if self.drive_mode == 'twist':
-            self.cmd_vel_sub = rospy.Subscriber('cmd_vel', Twist, self.cmd_vel)
+            self.cmd_vel_sub = self.create_subscription(Twist, 'cmd_vel', self.cmd_vel, 10)
             self.drive_cmd = self.robot.direct_drive
         elif self.drive_mode == 'drive':
-            self.cmd_vel_sub = rospy.Subscriber('cmd_vel', Drive, self.cmd_vel)
+            self.cmd_vel_sub = self.create_subscription(Drive, 'cmd_vel', self.cmd_vel, 10)
             self.drive_cmd = self.robot.drive
         elif self.drive_mode == 'turtle':
-            self.cmd_vel_sub = rospy.Subscriber('cmd_vel', Turtle, self.cmd_vel)
+            self.cmd_vel_sub = self.create_subscription(Turtle, 'cmd_vel', self.cmd_vel, 10)
             self.drive_cmd = self.robot.direct_drive
         else:
-            rospy.logerr("unknown drive mode :%s"%(self.drive_mode))
+            self.get_logger().error("unknown drive mode :%s" % (self.drive_mode))
 
         self.transform_broadcaster = None
         if self.publish_tf:
-            self.transform_broadcaster = tf.TransformBroadcaster()
-    
+            self.transform_broadcaster = tf2_ros.TransformBroadcaster(self)
+
     def reconfigure(self, config, level):
         self.update_rate = config['update_rate']
         self.drive_mode = config['drive_mode']
@@ -202,7 +215,7 @@ class TurtlebotNode(object):
             self._gyro.reconfigure(config, level)
         self.odom_angular_scale_correction = config['odom_angular_scale_correction']
         self.odom_linear_scale_correction = config['odom_linear_scale_correction']
-        self.cmd_vel_timeout = rospy.Duration(config['cmd_vel_timeout'])
+        self.cmd_vel_timeout = rclpy.Duration(config['cmd_vel_timeout'])
         self.stop_motors_on_bump = config['stop_motors_on_bump']
         self.min_abs_yaw_vel = config['min_abs_yaw_vel']
         self.max_abs_yaw_vel = config['max_abs_yaw_vel']
@@ -214,12 +227,12 @@ class TurtlebotNode(object):
         if self.min_abs_yaw_vel is not None and msg.angular.z != 0.0 and abs(msg.angular.z) < self.min_abs_yaw_vel:
             msg.angular.z = self.min_abs_yaw_vel if msg.angular.z > 0.0 else -self.min_abs_yaw_vel
         # Limit maximum yaw to avoid saturating the gyro
-        if self.max_abs_yaw_vel is not None and self.max_abs_yaw_vel > 0.0 and msg.angular.z != 0.0 and abs(msg.angular.z) > self.max_abs_yaw_vel: 
-            msg.angular.z = self.max_abs_yaw_vel if msg.angular.z > 0.0 else -self.max_abs_yaw_vel 
+        if self.max_abs_yaw_vel is not None and self.max_abs_yaw_vel > 0.0 and msg.angular.z != 0.0 and abs(msg.angular.z) > self.max_abs_yaw_vel:
+            msg.angular.z = self.max_abs_yaw_vel if msg.angular.z > 0.0 else -self.max_abs_yaw_vel
         if self.drive_mode == 'twist':
             # convert twist to direct_drive args
             ts  = msg.linear.x * 1000 # m -> mm
-            tw  = msg.angular.z  * (robot_types.ROBOT_TYPES[self.robot_type].wheel_separation / 2) * 1000 
+            tw  = msg.angular.z  * (robot_types.ROBOT_TYPES[self.robot_type].wheel_separation / 2) * 1000
             # Prevent saturation at max wheel speed when a compound command is sent.
             if ts > 0:
                 ts = min(ts,   MAX_WHEEL_SPEED - abs(tw))
@@ -229,7 +242,7 @@ class TurtlebotNode(object):
         elif self.drive_mode == 'turtle':
             # convert to direct_drive args
             ts  = msg.linear * 1000 # m -> mm
-            tw  = msg.angular  * (robot_types.ROBOT_TYPES[self.robot_type].wheel_separation / 2) * 1000 
+            tw  = msg.angular  * (robot_types.ROBOT_TYPES[self.robot_type].wheel_separation / 2) * 1000
             self.req_cmd_vel = int(ts - tw), int(ts + tw)
         elif self.drive_mode == 'drive':
             # convert twist to drive args, m->mm (velocity, radius)
@@ -237,7 +250,7 @@ class TurtlebotNode(object):
 
     def set_operation_mode(self,req):
         if not self.robot.sci:
-            rospy.logwarn("Create : robot not connected yet, sci not available")
+            self.get_logger().warn("Create : robot not connected yet, sci not available")
             return SetTurtlebotModeResponse(False)
 
         self.operate_mode = req.mode
@@ -249,7 +262,7 @@ class TurtlebotNode(object):
         elif req.mode == 3: #full
             self._robot_run_full()
         else:
-            rospy.logerr("Requested an invalid mode.")
+            self.get_logger().error("Requested an invalid mode.")
             return SetTurtlebotModeResponse(False)
         return SetTurtlebotModeResponse(True)
 
@@ -257,7 +270,7 @@ class TurtlebotNode(object):
         """
         Set robot into passive run mode
         """
-        rospy.loginfo("Setting turtlebot to passive mode.")
+        self.get_logger().info("Setting turtlebot to passive mode.")
         #setting all the digital outputs to 0
         self._set_digital_outputs([0, 0, 0])
         self.robot.passive()
@@ -266,8 +279,7 @@ class TurtlebotNode(object):
         """
         Perform a soft-reset of the Create
         """
-        msg ="Soft-rebooting turtlebot to passive mode."
-        rospy.logdebug(msg)
+        self.get_logger().dbg("Soft-rebooting turtlebot to passive mode.")
         self._diagnostics.node_status(msg,"warn")
         self._set_digital_outputs([0, 0, 0])
         self.robot.soft_reset()
@@ -277,27 +289,23 @@ class TurtlebotNode(object):
         """
         Set robot into safe run mode
         """
-        rospy.loginfo("Setting turtlebot to safe mode.")
+        self.get_logger().info("Setting turtlebot to safe mode.")
         self.robot.safe = True
         self.robot.control()
         b1 = (self.sensor_state.user_digital_inputs & 2)/2
         b2 = (self.sensor_state.user_digital_inputs & 4)/4
         self._set_digital_outputs([1, b1, b2])
 
-
-
     def _robot_run_full(self):
         """
         Set robot into full run mode
         """
-        rospy.loginfo("Setting turtlebot to full mode.")
+        self.get_logger().info("Setting turtlebot to full mode.")
         self.robot.safe = False
         self.robot.control()
         b1 = (self.sensor_state.user_digital_inputs & 2)/2
         b2 = (self.sensor_state.user_digital_inputs & 4)/4
         self._set_digital_outputs([1, b1, b2])
-
-
 
     def _set_digital_outputs(self, outputs):
         assert len(outputs) == 3, 'Expecting 3 output states.'
@@ -310,7 +318,7 @@ class TurtlebotNode(object):
     def set_digital_outputs(self,req):
         if not self.robot.sci:
             raise Exception("Robot not connected, SCI not available")
-            
+
         outputs = [req.digital_out_0,req.digital_out_1, req.digital_out_2]
         self._set_digital_outputs(outputs)
         return SetDigitalOutputsResponse(True)
@@ -321,28 +329,38 @@ class TurtlebotNode(object):
             self._gyro.update_calibration(sensor_state)
 
     def spin(self):
-
         # state
         s = self.sensor_state
-        odom = Odometry(header=rospy.Header(frame_id=self.odom_frame), child_frame_id=self.base_frame)
-        js = JointState(name = ["left_wheel_joint", "right_wheel_joint", "front_castor_joint", "back_castor_joint"],
-                        position=[0,0,0,0], velocity=[0,0,0,0], effort=[0,0,0,0])
+        odom = Odometry()
+        odom.header.frame_id = self.odom_frame
+        odom.child_frame_id = self.base_frame
+        js = JointState(
+            name = [
+                "left_wheel_joint",
+                "right_wheel_joint",
+                "front_castor_joint",
+                "back_castor_joint"
+            ],
+            position=[0,0,0,0],
+            velocity=[0,0,0,0],
+            effort=[0,0,0,0]
+        )
 
-        r = rospy.Rate(self.update_rate)
+        # r = rclpy.Rate(self.update_rate)
         last_cmd_vel = 0, 0
-        last_cmd_vel_time = rospy.get_rostime()
-        last_js_time = rospy.Time(0)
-        # We set the retry count to 0 initially to make sure that only 
-        # if we received at least one sensor package, we are robust 
-        # agains a few sensor read failures. For some strange reason, 
-        # sensor read failures can occur when switching to full mode 
-        # on the Roomba. 
-        sensor_read_retry_count = 0 
+        # TODO(allenh1): we need to grab this from ...somewhere...
+        last_cmd_vel_time = self.get_clock().now()
+        last_js_time = self.get_clock().now()
+        # We set the retry count to 0 initially to make sure that only
+        # if we received at least one sensor package, we are robust
+        # agains a few sensor read failures. For some strange reason,
+        # sensor read failures can occur when switching to full mode
+        # on the Roomba.
+        sensor_read_retry_count = 0
 
-
-        while not rospy.is_shutdown():
-            last_time = s.header.stamp
-            curr_time = rospy.get_rostime()
+        while rclpy.ok():
+            last_time = Time.from_msg(s.header.stamp)
+            curr_time = self.get_clock().now()
 
             # SENSE/COMPUTE STATE
             try:
@@ -350,29 +368,31 @@ class TurtlebotNode(object):
                 transform = self.compute_odom(s, last_time, odom)
                 # Future-date the joint states so that we don't have
                 # to publish as frequently.
-                js.header.stamp = curr_time + rospy.Duration(1)
+                js.header.stamp = Time.to_msg(curr_time + Duration(seconds=1)) 
             except select.error:
                 # packet read can get interrupted, restart loop to
                 # check for exit conditions
                 continue
-
-            except DriverError: 
-                if sensor_read_retry_count > 0: 
-                    rospy.logwarn('Failed to read sensor package. %d retries left.' % sensor_read_retry_count) 
-                    sensor_read_retry_count -= 1 
-                    continue 
-                else: 
-                    raise 
-            sensor_read_retry_count = self._SENSOR_READ_RETRY_COUNT 
+            except DriverError:
+                if sensor_read_retry_count > 0:
+                    self.get_logger().warn(
+                        'Failed to read sensor package. %d retries left.' %
+                        sensor_read_retry_count
+                    )
+                    sensor_read_retry_count -= 1
+                    continue
+                else:
+                    raise
+            sensor_read_retry_count = self._SENSOR_READ_RETRY_COUNT
 
             # Reboot Create if we detect that charging is necessary.
             if s.charging_sources_available > 0 and \
                    s.oi_mode == 1 and \
                    s.charging_state in [0, 5] and \
                    s.charge < 0.93*s.capacity:
-                rospy.loginfo("going into soft-reboot and exiting driver")
+                self.get_logger().info("going into soft-reboot and exiting driver")
                 self._robot_reboot()
-                rospy.loginfo("exiting driver")
+                self.get_logger().info("exiting driver")
                 break
 
             # Reboot Create if we detect that battery is at critical level switch to passive mode.
@@ -380,9 +400,9 @@ class TurtlebotNode(object):
                    s.oi_mode == 3 and \
                    s.charging_state in [0, 5] and \
                    s.charge < 0.15*s.capacity:
-                rospy.loginfo("going into soft-reboot and exiting driver")
+                self.get_logger().info("going into soft-reboot and exiting driver")
                 self._robot_reboot()
-                rospy.loginfo("exiting driver")
+                self.get_logger().info("exiting driver")
                 break
 
             # PUBLISH STATE
@@ -391,30 +411,29 @@ class TurtlebotNode(object):
             if self.publish_tf:
                 self.publish_odometry_transform(odom)
             # 1hz, future-dated joint state
-            if curr_time > last_js_time + rospy.Duration(1):
+            if curr_time > last_js_time + Duration(seconds=1):
                 self.joint_states_pub.publish(js)
                 last_js_time = curr_time
-            self._diagnostics.publish(s, self._gyro)
+            # self._diagnostics.publish(s, self._gyro)
             if self._gyro:
                 self._gyro.publish(s, last_time)
 
             # ACT
-            if self.req_cmd_vel is not None:
+            if self.req_cmd_vel:
                 # check for velocity command and set the robot into full mode if not plugged in
-                if s.oi_mode != self.operate_mode and s.charging_sources_available != 1:
-                    if self.operate_mode == 2:
-                        self._robot_run_safe()
-                    else:
-                        self._robot_run_full()
+                # if s.oi_mode != self.operate_mode and s.charging_sources_available != 1:
+                #    if self.operate_mode == 2:
+                #        self._robot_run_safe()
+                #    else:
+                #        self._robot_run_full()
 
                 # check for bumper contact and limit drive command
                 req_cmd_vel = self.check_bumpers(s, self.req_cmd_vel)
 
                 # Set to None so we know it's a new command
-                self.req_cmd_vel = None
+                # self.req_cmd_vel = None
                 # reset time for timeout
                 last_cmd_vel_time = last_time
-
             else:
                 #zero commands on timeout
                 if last_time - last_cmd_vel_time > self.cmd_vel_timeout:
@@ -426,8 +445,7 @@ class TurtlebotNode(object):
             self.drive_cmd(*req_cmd_vel)
             # record command
             last_cmd_vel = req_cmd_vel
-
-            r.sleep()
+            break
 
     def check_bumpers(self, s, cmd_vel):
         # Safety: disallow forward motion if bumpers or wheeldrops
@@ -449,7 +467,7 @@ class TurtlebotNode(object):
         @param sensor_state: Current sensor reading
         @type  sensor_state: TurtlebotSensorState
         @param last_time: time of last sensor reading
-        @type  last_time: rospy.Time
+        @type  last_time: Time
         @param odom: Odometry instance to update.
         @type  odom: nav_msgs.msg.Odometry
 
@@ -458,8 +476,8 @@ class TurtlebotNode(object):
         """
         # based on otl_roomba by OTL <t.ogura@gmail.com>
 
-        current_time = sensor_state.header.stamp
-        dt = (current_time - last_time).to_sec()
+        current_time = Time.from_msg(sensor_state.header.stamp)
+        dt = current_time - last_time
 
         # On startup, Create can report junk readings
         if abs(sensor_state.distance) > 1.0 or abs(sensor_state.angle) > 1.0:
@@ -484,35 +502,59 @@ class TurtlebotNode(object):
         transform = (self._pos2d.x, self._pos2d.y, 0.), odom_quat
 
         # update the odometry state
-        odom.header.stamp = current_time
-        odom.pose.pose   = Pose(Point(self._pos2d.x, self._pos2d.y, 0.), Quaternion(*odom_quat))
-        odom.twist.twist = Twist(Vector3(d/dt, 0, 0), Vector3(0, 0, angle/dt))
-        if sensor_state.requested_right_velocity == 0 and \
+        odom.header.stamp = Time.to_msg(current_time)
+        odom.pose.pose.position.x = self._pos2d.x
+        odom.pose.pose.position.y = self._pos2d.y
+        odom.pose.pose.orientation = Quaternion(
+            x=0., y=0., z=sin(self._pos2d.theta / 2.), w=cos(self._pos2d.theta / 2.)
+        )
+        if dt.nanoseconds > 0:
+            odom.twist.twist.linear = Vector3(x=(d / (dt.nanoseconds * 1e-9)), y=0., z=0.)
+            odom.twist.twist.angular = Vector3(x=0., y=0., z=(angle / (dt.nanoseconds * 1e-9)))
+            if sensor_state.requested_right_velocity == 0 and \
                sensor_state.requested_left_velocity == 0 and \
                sensor_state.distance == 0:
-            odom.pose.covariance = ODOM_POSE_COVARIANCE2
-            odom.twist.covariance = ODOM_TWIST_COVARIANCE2
-        else:
-            odom.pose.covariance = ODOM_POSE_COVARIANCE
-            odom.twist.covariance = ODOM_TWIST_COVARIANCE
+                odom.pose.covariance = ODOM_POSE_COVARIANCE2
+                odom.twist.covariance = ODOM_TWIST_COVARIANCE2
+            else:
+                odom.pose.covariance = ODOM_POSE_COVARIANCE
+                odom.twist.covariance = ODOM_TWIST_COVARIANCE
 
         # return the transform
         return transform
 
     def publish_odometry_transform(self, odometry):
-        self.transform_broadcaster.sendTransform(
-            (odometry.pose.pose.position.x, odometry.pose.pose.position.y, odometry.pose.pose.position.z),
-            (odometry.pose.pose.orientation.x, odometry.pose.pose.orientation.y, odometry.pose.pose.orientation.z,
-             odometry.pose.pose.orientation.w),
-             odometry.header.stamp, odometry.child_frame_id, odometry.header.frame_id)
+        transform = TransformStamped()
+        transform.header.stamp = odometry.header.stamp
+        transform.child_frame_id = odometry.child_frame_id
+        transform.header.frame_id = odometry.header.frame_id
+        transform.transform.translation.x = odometry.pose.pose.position.x
+        transform.transform.translation.y = odometry.pose.pose.position.y
+        transform.transform.translation.z = odometry.pose.pose.position.z
+        transform.transform.rotation.x = odometry.pose.pose.orientation.x
+        transform.transform.rotation.y = odometry.pose.pose.orientation.y
+        transform.transform.rotation.z = odometry.pose.pose.orientation.z
+        transform.transform.rotation.w = odometry.pose.pose.orientation.w
+        self.transform_broadcaster.sendTransform(transform)
+
 
 def connected_file():
-    return os.path.join(rospkg.get_ros_home(), 'turtlebot-connected')
+    # TODO(allenh1): avoid hard-coding '/tmp' here
+    return os.path.join('/tmp', 'turtlebot-connected')
 
-def turtlebot_main(argv):
-    c = TurtlebotNode()
-    while not rospy.is_shutdown():
-        try:
+def turtlebot_main(args=None):
+    if args is None:
+        args = sys.argv
+
+    rclpy.init(args=args)
+
+    node = TurtlebotNode()
+    node.start()
+    node._robot_run_full()
+    time.sleep(3.0)
+    # while rclpy.ok():
+    rclpy.spin(node)
+        # try:
             # This sleep throttles reconnecting of the driver.  It
             # appears that pyserial does not properly release the file
             # descriptor for the USB port in the event that the Create is
@@ -523,21 +565,25 @@ def turtlebot_main(argv):
             # reconnection occurs.  However, it order to not do bad things
             # to the Create bootloader, and also to keep relaunching at a
             # minimum, we have a 3-second sleep.
-            time.sleep(3.0)
-            
-            c.start()
-            c.spin()
+            # time.sleep(3.0)
 
-        except Exception as ex:
-            msg = "Failed to contact device with error: [%s]. Please check that the Create is powered on and that the connector is plugged into the Create."%(ex)
-            c._diagnostics.node_status(msg,"error")
-            rospy.logerr(msg)
+            # node.start()
+            # rclpy.spin(node)
+            # node.spin()
+            # node.destroy_node()
+            # rclpy.shutdown()
 
-        finally:
-            # Driver no longer connected, delete flag from disk
-            try:
-                os.remove(connected_file())
-            except Exception: pass
+#        except Exception as ex:
+#            msg = "Failed to contact device with error: [%s]. Please check that the Create is powered on and that the connector is plugged into the Create."%(ex)
+            # node._diagnostics.node_status(msg,"error")
+#            node.get_logger().error(msg)0
+#
+#        finally:
+#            # Driver no longer connected, delete flag from disk
+#            try:
+#                os.remove(connected_file())
+#            except Exception:
+#                pass
 
 
 if __name__ == '__main__':

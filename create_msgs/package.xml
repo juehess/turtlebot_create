@@ -1,0 +1,32 @@
+<package format="3">
+  <name>create_msgs</name>
+  <version>0.0.0</version>
+  <description>
+    ROS 2 messages for the iRobot Create ROS driver node.
+    This originally belonged to the create_node package, but
+    was separated to ease in the porting.
+  </description>
+  <maintainer email="hunterlallen@protonmail.com">Hunter L. Allen</maintainer>
+  <license>BSD</license>
+  <url type="website">http://ros.org/wiki/create_node</url>
+  <url type="repository">https://github.com/turtlebot/turtlebot_create</url>
+  <url type="bugtracker">https://github.com/turtlebot/turtlebot_create/issues</url>
+  <author email="kwc@kwc.org">Ken Conley</author>
+  <author email="mwise@willowgarage.com">Melonee Wise</author>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <build_depend>std_msgs</build_depend>
+
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <test_depend>ament_lint_common</test_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

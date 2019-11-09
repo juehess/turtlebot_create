@@ -38,7 +38,7 @@ uint8 CHARGING_TRICKLE_CHARGING = 3
 uint8 CHARGING_WAITING = 4 
 uint8 CHARGING_CHARGING_ERROR = 5
 
-Header header
+std_msgs/Header header
 
 uint8 bumps_wheeldrops
 bool wall
@@ -75,8 +75,7 @@ uint8 song_number
 bool song_playing
 
 uint8 number_of_stream_packets
-int32 requested_velocity  # m/s
-int32 requested_radius  # m
-int32 requested_right_velocity  # m/s
-int32 requested_left_velocity  # m/s
-
+float64 requested_velocity  # m/s
+float64 requested_radius  # m
+float64 requested_right_velocity  # m/s
+float64 requested_left_velocity  # m/s

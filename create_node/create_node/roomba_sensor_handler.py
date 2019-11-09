@@ -35,12 +35,12 @@ import logging
 import time
 import math
 
-import rospy
+import rclpy
 import create_driver
 
 import std_msgs.msg as std_msgs
 
-import robot_types
+import create_node.robot_types
 
 class RoombaSensorHandler(object):
 
@@ -93,7 +93,7 @@ class RoombaSensorHandler(object):
        self.left_motor_current, self.right_motor_current,
        self.main_brish_current, self.side_brush_current,
        self.statis, ) = self._sensor_state_struct.unpack(buffer[0:80])
-    except struct.error, e:
+    except struct.error as e:
       raise roslib.message.DeserializationError(e)
 
     self.wall = bool(self.wall)

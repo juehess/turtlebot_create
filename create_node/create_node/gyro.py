@@ -30,34 +30,41 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-#Melonee Wise mwise@willowgarage.com
+# Melonee Wise mwise@willowgarage.com
 
-import rospy
+import rclpy
 import math
 import copy
-import sensor_msgs.msg
 import PyKDL
 
-class TurtlebotGyro():
+from std_msgs.msg import Header
+from sensor_msgs.msg import Imu
+
+
+class TurtlebotGyro(Node):
     def __init__(self):
         self.cal_offset = 0.0
         self.orientation = 0.0
         self.cal_buffer =[]
         self.cal_buffer_length = 1000
-        self.imu_data = sensor_msgs.msg.Imu(header=rospy.Header(frame_id="gyro_link"))
+        node = rclpy.create_node('turtlebot_imu')
+        self.imu_data = Imu(header=Header(frame_id="gyro_link"))
         self.imu_data.orientation_covariance = [1e6, 0, 0, 0, 1e6, 0, 0, 0, 1e-6]
         self.imu_data.angular_velocity_covariance = [1e6, 0, 0, 0, 1e6, 0, 0, 0, 1e-6]
         self.imu_data.linear_acceleration_covariance = [-1,0,0,0,0,0,0,0,0]
-        self.gyro_measurement_range = rospy.get_param('~gyro_measurement_range', 150.0) 
-        self.gyro_scale_correction = rospy.get_param('~gyro_scale_correction', 1.35)
-        self.imu_pub = rospy.Publisher('imu/data', sensor_msgs.msg.Imu, queue_size=10)
-        self.imu_pub_raw = rospy.Publisher('imu/raw', sensor_msgs.msg.Imu, queue_size=10)
+        # TODO(allenh1): use these parameters once rclpy has parameters (C turtle, probably)
+        # self.gyro_measurement_range = rospy.get_param('~gyro_measurement_range', 150.0)
+        # self.gyro_scale_correction = rospy.get_param('~gyro_scale_correction', 1.35)
+        self.gyro_measurement_range = 150.0
+        self.gyro_scale_correction = 1.35
+        self.imu_pub = self.create_publisher(IMU, 'imu/data')
+        self.imu_pub_raw = self.create_publisher(IMU, 'imu/raw')
 
-    def reconfigure(self, config, level): 
-        self.gyro_measurement_range = config['gyro_measurement_range'] 
+    def reconfigure(self, config, level):
+        self.gyro_measurement_range = config['gyro_measurement_range']
         self.gyro_scale_correction = config['gyro_scale_correction']
-        rospy.loginfo('self.gyro_measurement_range %f'%self.gyro_measurement_range) 
-        rospy.loginfo('self.gyro_scale_correction %f'%self.gyro_scale_correction) 
+        self.get_logger().info('self.gyro_measurement_range %f' % self.gyro_measurement_range)
+        self.get_logger().info('self.gyro_scale_correction %f' % self.gyro_scale_correction)
 
     def update_calibration(self, sensor_state):
         #check if we're not moving and update the calibration offset
@@ -65,12 +72,12 @@ class TurtlebotGyro():
         if sensor_state.requested_right_velocity == 0 and \
                sensor_state.requested_left_velocity == 0 and \
                sensor_state.distance == 0:
-        
+
             self.cal_buffer.append(sensor_state.user_analog_input)
             if len(self.cal_buffer) > self.cal_buffer_length:
                 del self.cal_buffer[:-self.cal_buffer_length]
-            self.cal_offset = sum(self.cal_buffer)/len(self.cal_buffer)
-            
+            self.cal_offset = sum(self.cal_buffer) / len(self.cal_buffer)
+
     def publish(self, sensor_state, last_time):
         if self.cal_offset == 0:
             return
@@ -95,4 +102,3 @@ class TurtlebotGyro():
         #print orientation
         (self.imu_data.orientation.x, self.imu_data.orientation.y, self.imu_data.orientation.z, self.imu_data.orientation.w) = PyKDL.Rotation.RotZ(raw_orientation).GetQuaternion()
         self.imu_pub_raw.publish(self.imu_data)
-

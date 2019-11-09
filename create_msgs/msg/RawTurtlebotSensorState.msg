@@ -38,7 +38,7 @@ uint8 CHARGING_TRICKLE_CHARGING = 3
 uint8 CHARGING_WAITING = 4 
 uint8 CHARGING_CHARGING_ERROR = 5
 
-Header header
+std_msgs/Header header
 
 uint8 bumps_wheeldrops
 bool wall
@@ -78,4 +78,3 @@ int16 requested_velocity  # mm/s
 int16 requested_radius  # mm
 int16 requested_right_velocity  # mm/s
 int16 requested_left_velocity  # mm/s
-

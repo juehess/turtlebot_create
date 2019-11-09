@@ -32,7 +32,7 @@
 
 #Melonee Wise mwise@willowgarage.com
 
-import rospy
+import rclpy
 
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
