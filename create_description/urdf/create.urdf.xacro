@@ -296,9 +296,9 @@
 	  </link>
 	  
 	  <!-- Simulation sensors -->
-	  <sim_create/>
-	  <sim_create_wall_sensor/>
-	  <sim_create_cliff_sensors/>
-    <sim_imu/>
+	  <xacro:sim_create/>
+	  <xacro:sim_create_wall_sensor/>
+	  <xacro:sim_create_cliff_sensors/>
+	  <xacro:sim_imu/>
   </xacro:macro>
 </robot>

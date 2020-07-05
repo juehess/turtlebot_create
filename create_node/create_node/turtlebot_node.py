@@ -79,7 +79,7 @@ from create_node.songs import bonus
 class TurtlebotNode(Node):
     _SENSOR_READ_RETRY_COUNT = 5
 
-    def __init__(self, default_port='/dev/ttyUSB0', default_update_rate=30.0):
+    def __init__(self, default_port='/dev/ttyUSB0', default_update_rate=60.0):
         super().__init__('turtlebot')
         """
         @param default_port: default tty port to use for establishing
@@ -502,7 +502,7 @@ class TurtlebotNode(Node):
         transform = (self._pos2d.x, self._pos2d.y, 0.), odom_quat
 
         # update the odometry state
-        odom.header.stamp = Time.to_msg(current_time)
+        odom.header.stamp = self.get_clock().now().to_msg()
         odom.pose.pose.position.x = self._pos2d.x
         odom.pose.pose.position.y = self._pos2d.y
         odom.pose.pose.orientation = Quaternion(
@@ -568,6 +568,7 @@ def turtlebot_main(args=None):
             # time.sleep(3.0)
 
             # node.start()
+            
             # rclpy.spin(node)
             # node.spin()
             # node.destroy_node()
