@@ -100,7 +100,7 @@ class TurtlebotNode(Node):
         self._pos2d = Pose2D() # 2D pose for odometry
 
         # self._diagnostics = TurtlebotDiagnostics()
-
+        self.has_gyro = False
         # TODO(allenh1): Enable gyro when possible (port PyKDL)
         # if self.has_gyro:
         #     from create_node.gyro import TurtlebotGyro
@@ -162,8 +162,8 @@ class TurtlebotNode(Node):
             ).value
         )
         self.stop_motors_on_bump = self.declare_parameter('stop_motors_on_bump', True).value
-        self.min_abs_yaw_vel = self.declare_parameter('min_abs_yaw_vel', None).value
-        self.max_abs_yaw_vel = self.declare_parameter('max_abs_yaw_vel', None).value
+        self.min_abs_yaw_vel = self.declare_parameter('min_abs_yaw_vel', rclpy.Parameter.Type.DOUBLE).value
+        self.max_abs_yaw_vel = self.declare_parameter('max_abs_yaw_vel', rclpy.Parameter.Type.DOUBLE).value
         self.publish_tf = self.declare_parameter('publish_tf', True).value
         self.odom_frame = self.declare_parameter('odom_frame', 'odom').value
         self.base_frame = self.declare_parameter('base_frame', 'base_footprint').value
