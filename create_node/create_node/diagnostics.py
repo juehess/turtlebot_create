@@ -14,7 +14,7 @@
 #    disclaimer in the documentation and/or other materials provided
 #    with the distribution.
 #  * Neither the name of the Willow Garage nor the names of its
-#    contributors may be used to endorse or promote products derived
+#    contributors may bediag used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -33,11 +33,13 @@
 #Melonee Wise mwise@willowgarage.com
 
 import rclpy
-
+from rclpy.node import Node
+from rclpy.time import Time, Duration
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
-class TurtlebotDiagnostics():
+class TurtlebotDiagnostics(Node):
     def __init__(self):
+        super().__init__('turtlebot_diagnostics')
         self.charging_state =  {0:"Not Charging",
                                 1:"Reconditioning Charging",
                                 2:"Full Charging",
@@ -52,13 +54,13 @@ class TurtlebotDiagnostics():
         self.oi_mode = {1:"Passive",
                         2:"Safe",
                         3:"Full"}
-        self.diag_pub = rospy.Publisher('/diagnostics', DiagnosticArray, queue_size=10)
-        self.last_diagnostics_time = rospy.get_rostime()        
+        self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.last_diagnostics_time = self.get_clock().now()
 
     def node_status(self, msg, status):
-        curr_time = rospy.Time.now()
+        curr_time = self.get_clock().now()
         diag = DiagnosticArray()
-        diag.header.stamp = curr_time
+        diag.header.stamp = Time.to_msg(curr_time)
         stat = DiagnosticStatus()
         if status == "error":
             stat = DiagnosticStatus(name="TurtleBot Node", level=DiagnosticStatus.ERROR, message=msg)
@@ -69,14 +71,15 @@ class TurtlebotDiagnostics():
 
 
     def publish(self, sensor_state, gyro):
-        curr_time = sensor_state.header.stamp
+        curr_time = Time.from_msg(sensor_state.header.stamp)
         # limit to 5hz
-        if (curr_time - self.last_diagnostics_time).to_sec() < 0.2:
+        diff_time = (curr_time - self.last_diagnostics_time).nanoseconds / 1e9
+        if diff_time < 0.2:
             return
         self.last_diagnostics_time = curr_time
 
         diag = DiagnosticArray()
-        diag.header.stamp = curr_time
+        diag.header.stamp = Time.to_msg(curr_time)
         stat = DiagnosticStatus()
 
         #node status
@@ -90,7 +93,7 @@ class TurtlebotDiagnostics():
         except KeyError as ex:
             stat.level=DiagnosticStatus.ERROR
             stat.message = "Invalid OI Mode Reported %s"%ex
-            rospy.logwarn(stat.message)
+            self.get_logger().warn(stat.message)
         diag.status.append(stat)
         
         #battery info
@@ -99,12 +102,13 @@ class TurtlebotDiagnostics():
         if sensor_state.charging_state == 5:
             stat.level = DiagnosticStatus.ERROR
             stat.message = "Charging Fault Condition"
-            values.append(KeyValue("Charging State", self.charging_state[sensor_state.charging_state]))
-        values.extend([KeyValue("Voltage (V)", str(sensor_state.voltage/1000.0)),
-                       KeyValue("Current (A)", str(sensor_state.current/1000.0)),
-                       KeyValue("Temperature (C)",str(sensor_state.temperature)),
-                       KeyValue("Charge (Ah)", str(sensor_state.charge/1000.0)),
-                       KeyValue("Capacity (Ah)", str(sensor_state.capacity/1000.0))])
+            values.append(KeyValue(key="Charging State", value=self.charging_state[sensor_state.charging_state]))
+
+        values.extend([KeyValue(key="Voltage (V)", value=str(sensor_state.voltage / 1000.0)),
+                       KeyValue(key="Current (A)", value=str(sensor_state.current/1000.0)),
+                       KeyValue(key="Temperature (C)",value=str(sensor_state.temperature)),
+                       KeyValue(key="Charge (Ah)", value=str(sensor_state.charge/1000.0)),
+                       KeyValue(key="Capacity (Ah)", value=str(sensor_state.capacity/1000.0))])
         diag.status.append(stat)
         
         #charging source
@@ -114,7 +118,7 @@ class TurtlebotDiagnostics():
         except KeyError as ex:
             stat.level=DiagnosticStatus.ERROR
             stat.message = "Invalid Charging Source %s, actual value: %i"%(ex,sensor_state.charging_sources_available)
-            rospy.logwarn(stat.message)
+            self.get_logger().warn(stat.message)
         diag.status.append(stat)
         #cliff sensors
         stat = DiagnosticStatus(name="Cliff Sensor", level=DiagnosticStatus.OK, message="OK")
@@ -125,14 +129,14 @@ class TurtlebotDiagnostics():
                 stat.level = DiagnosticStatus.OK # We're OK here
             else:
                 stat.message = "Near Cliff"
-        stat.values = [KeyValue("Left", str(sensor_state.cliff_left)),
-                       KeyValue("Left Signal", str(sensor_state.cliff_left_signal)),
-                       KeyValue("Front Left", str(sensor_state.cliff_front_left)),
-                       KeyValue("Front Left Signal", str(sensor_state.cliff_front_left_signal)),
-                       KeyValue("Front Right", str(sensor_state.cliff_right)),
-                       KeyValue("Front Right Signal", str(sensor_state.cliff_right_signal)),
-                       KeyValue("Right", str(sensor_state.cliff_front_right)),
-                       KeyValue("Right Signal", str(sensor_state.cliff_front_right_signal))]
+        stat.values = [KeyValue(key="Left", value=str(sensor_state.cliff_left)),
+                       KeyValue(key="Left Signal", value=str(sensor_state.cliff_left_signal)),
+                       KeyValue(key="Front Left", value=str(sensor_state.cliff_front_left)),
+                       KeyValue(key="Front Left Signal", value=str(sensor_state.cliff_front_left_signal)),
+                       KeyValue(key="Front Right", value=str(sensor_state.cliff_right)),
+                       KeyValue(key="Front Right Signal", value=str(sensor_state.cliff_right_signal)),
+                       KeyValue(key="Right", value=str(sensor_state.cliff_front_right)),
+                       KeyValue(key="Right Signal", value=str(sensor_state.cliff_front_right_signal))]
         diag.status.append(stat)
         #Wall sensors
         stat = DiagnosticStatus(name="Wall Sensor", level=DiagnosticStatus.OK, message="OK")
@@ -140,9 +144,9 @@ class TurtlebotDiagnostics():
         if sensor_state.wall:
             stat.level = DiagnosticStatus.ERROR
             stat.message = "Near Wall"
-        stat.values = [KeyValue("Wall", str(sensor_state.wall)),
-                       KeyValue("Wall Signal", str(sensor_state.wall_signal)),
-                       KeyValue("Virtual Wall", str(sensor_state.virtual_wall))]
+        stat.values = [KeyValue(key="Wall", value=str(sensor_state.wall)),
+                       KeyValue(key="Wall Signal", value=str(sensor_state.wall_signal)),
+                       KeyValue(key="Virtual Wall", value=str(sensor_state.virtual_wall))]
         diag.status.append(stat)
         #Gyro
         stat = DiagnosticStatus(name="Gyro Sensor", level = DiagnosticStatus.OK, message = "OK")
@@ -157,18 +161,18 @@ class TurtlebotDiagnostics():
             stat.message = "Bad Gyro Calibration Offset: The gyro average is outside the standard deviation."
 
         if gyro is not None:    
-            stat.values = [KeyValue("Gyro Enabled", str(gyro is not None)),
-                           KeyValue("Raw Gyro Rate", str(sensor_state.user_analog_input)),
-                           KeyValue("Calibration Offset", str(gyro.cal_offset)),
-                           KeyValue("Calibration Buffer", str(gyro.cal_buffer))]
+            stat.values = [KeyValue(key="Gyro Enabled", value=str(gyro is not None)),
+                           KeyValue(key="Raw Gyro Rate", value=str(sensor_state.user_analog_input)),
+                           KeyValue(key="Calibration Offset", value=str(gyro.cal_offset)),
+                           KeyValue(key="Calibration Buffer", value=str(gyro.cal_buffer))]
         diag.status.append(stat)
         #Digital IO
         stat = DiagnosticStatus(name="Digital Outputs", level = DiagnosticStatus.OK, message = "OK")
         out_byte = sensor_state.user_digital_outputs
-        stat.values = [KeyValue("Raw Byte", str(out_byte)),
-                       KeyValue("Digital Out 2", self.digital_outputs[out_byte%2]),
-                       KeyValue("Digital Out 1", self.digital_outputs[(out_byte >>1)%2]),
-                       KeyValue("Digital Out 0", self.digital_outputs[(out_byte >>2)%2])]
+        stat.values = [KeyValue(key="Raw Byte", value=str(out_byte)),
+                       KeyValue(key="Digital Out 2", value=self.digital_outputs[out_byte%2]),
+                       KeyValue(key="Digital Out 1", value=self.digital_outputs[(out_byte >>1)%2]),
+                       KeyValue(key="Digital Out 0", value=self.digital_outputs[(out_byte >>2)%2])]
         diag.status.append(stat)
         #publish
         self.diag_pub.publish(diag)

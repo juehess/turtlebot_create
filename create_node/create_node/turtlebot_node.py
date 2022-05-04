@@ -99,14 +99,13 @@ class TurtlebotNode(Node):
 
         self._pos2d = Pose2D() # 2D pose for odometry
 
-        # self._diagnostics = TurtlebotDiagnostics()
-        self.has_gyro = False
-        # TODO(allenh1): Enable gyro when possible (port PyKDL)
-        # if self.has_gyro:
-        #     from create_node.gyro import TurtlebotGyro
-        #     self._gyro = TurtlebotGyro()
-        # else:
-        self._gyro = None
+        self._diagnostics = TurtlebotDiagnostics()
+#        self.has_gyro = False
+        if self.has_gyro:
+            from create_node.gyro import TurtlebotGyro
+            self._gyro = TurtlebotGyro()
+        else:
+            self._gyro = None
         self.create_timer(1.0 / self.update_rate, self.spin)
         # TODO(allenh1): implement parameters
         # dynamic_reconfigure.server.Server(TurtleBotConfig, self.reconfigure)
@@ -126,7 +125,8 @@ class TurtlebotNode(Node):
         self.sensor_handler = robot_types.ROBOT_TYPES[self.robot_type].sensor_handler(self.robot)
         self.robot.safe = True
 
-        if self.declare_parameter('bonus', False).value:
+        if self.declare_parameter('bonus', False).value:        # TODO(allenh1): Enable gyro when possible (port PyKDL)
+
             bonus(self.robot)
 
         self.robot.control()
@@ -414,7 +414,7 @@ class TurtlebotNode(Node):
             if curr_time > last_js_time + Duration(seconds=1):
                 self.joint_states_pub.publish(js)
                 last_js_time = curr_time
-            # self._diagnostics.publish(s, self._gyro)
+            self._diagnostics.publish(s, self._gyro)
             if self._gyro:
                 self._gyro.publish(s, last_time)
 

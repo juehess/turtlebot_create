@@ -91,42 +91,7 @@ class TurtlebotSensorStateMsg():
         self.requested_left_velocity = None
 
 
-def deserialize(msg, buff, timestamp):
-    """
-    unpack serialized message in str into this message instance
-    @param buff: byte array of serialized message
-    @type  buff: str
-    """
-    try:
-        _x = TurtlebotSensorStateMsg()
-        (_x.bumps_wheeldrops, _x.wall, _x.cliff_left, _x.cliff_front_left, _x.cliff_front_right, _x.cliff_right, _x.virtual_wall, _x.motor_overcurrents, _x.dirt_detector_left, _x.dirt_detector_right, _x.remote_opcode, _x.buttons, _x.distance, _x.angle, _x.charging_state, _x.voltage, _x.current, _x.temperature, _x.charge, _x.capacity, _x.wall_signal, _x.cliff_left_signal, _x.cliff_front_left_signal, _x.cliff_front_right_signal, _x.cliff_right_signal, _x.user_digital_inputs, _x.user_analog_input, _x.charging_sources_available, _x.oi_mode, _x.song_number, _x.song_playing, _x.number_of_stream_packets, _x.requested_velocity, _x.requested_radius, _x.requested_right_velocity, _x.requested_left_velocity,) = _struct_12B2hBHhb7HBH5B4h.unpack(buff[0:52])
-
-        msg.wall = bool(_x.wall)
-        msg.cliff_left = bool(_x.cliff_left)
-        msg.cliff_front_left = bool(_x.cliff_front_left)
-        msg.cliff_front_right = bool(_x.cliff_front_right)
-        msg.cliff_right = bool(_x.cliff_right)
-        msg.virtual_wall = bool(_x.virtual_wall)
-        msg.song_playing = bool(_x.song_playing)
-
-        # do unit conversions
-        msg.angle = radians(_x.angle)
-        # msg.header.stamp = rclpy
-        msg.distance = float(_x.distance) / 1000.
-    
-        msg.requested_velocity = float(_x.requested_velocity) / 1000.
-        msg.requested_radius = float(_x.requested_radius) / 1000.
-        msg.requested_right_velocity = float(_x.requested_right_velocity) / 1000.
-        msg.requested_left_velocity = float(_x.requested_left_velocity) / 1000.
-
-        return msg
-    except struct.error as e:
-        # TODO(allenh1): evaluate what this looks like in ROS 2
-        # raise roslib.message.DeserializationError(e)
-        raise Exception(e)
-
-
-class CreateSensorHandler(object):    
+class CreateSensorHandler(object):
     def __init__(self, robot):
         self.robot = robot
         self.node = Node('SensorHandlerNode')
@@ -146,7 +111,74 @@ class CreateSensorHandler(object):
 
     def get_all(self, sensor_state):
         buff, timestamp = self.request_packet(6)
-        # self.node.get_logger().info("buffer lenght: '%d'" % len(buff))
-        # self.node.get_logger().info("buffer: '%s'" % buff)
+        #self.node.get_logger().info("buffer lenght: '%d'" % len(buff))
+        #self.node.get_logger().info("buffer: '%s'" % buff)
         if buff:
-            deserialize(sensor_state, buff, timestamp)
+            self.deserialize(sensor_state, buff, timestamp)
+            self.node.get_logger().info("charging state: " +str(sensor_state.user_analog_input))
+
+    def deserialize(self, msg, buff, timestamp):
+        """
+        unpack serialized message in str into this message instance
+        @param buff: byte array of serialized message
+        @type  buff: str
+        """
+        try:
+            _x = TurtlebotSensorStateMsg()
+            (_x.bumps_wheeldrops, _x.wall, _x.cliff_left, _x.cliff_front_left, _x.cliff_front_right, _x.cliff_right,
+             _x.virtual_wall, _x.motor_overcurrents, _x.dirt_detector_left, _x.dirt_detector_right, _x.remote_opcode,
+             _x.buttons, _x.distance, _x.angle, _x.charging_state, _x.voltage, _x.current, _x.temperature, _x.charge,
+             _x.capacity, _x.wall_signal, _x.cliff_left_signal, _x.cliff_front_left_signal, _x.cliff_front_right_signal,
+             _x.cliff_right_signal, _x.user_digital_inputs, _x.user_analog_input, _x.charging_sources_available,
+             _x.oi_mode, _x.song_number, _x.song_playing, _x.number_of_stream_packets, _x.requested_velocity,
+             _x.requested_radius, _x.requested_right_velocity, _x.requested_left_velocity,) = \
+                _struct_12B2hBHhb7HBH5B4h.unpack(buff[0:52])
+
+            msg.wall = bool(_x.wall)
+            msg.cliff_left = bool(_x.cliff_left)
+            msg.cliff_left_signal = _x.cliff_left_signal
+            msg.cliff_front_left = bool(_x.cliff_front_left)
+            msg.cliff_front_left_signal = _x.cliff_front_left_signal
+            msg.cliff_front_right = bool(_x.cliff_front_right)
+            msg.cliff_front_right_signal = _x.cliff_front_right_signal
+            msg.cliff_right = bool(_x.cliff_right)
+            msg.cliff_right_signal = _x.cliff_right_signal
+            msg.virtual_wall = bool(_x.virtual_wall)
+
+            msg.motor_overcurrents = _x.motor_overcurrents
+            msg.buttons = _x.buttons
+
+            # do unit conversions
+            msg.angle = radians(_x.angle)
+            msg.header.stamp = timestamp.to_msg()#rclpy        msg.header.stamp = rospy.Time.from_seconds(timestamp)
+            msg.distance = float(_x.distance) / 1000.
+
+            msg.charging_state = _x.charging_state
+            msg.voltage = _x.voltage
+            msg.current = _x.current
+            msg.temperature = _x.temperature
+            msg.charge = _x.charge
+            msg.capacity = _x.capacity
+
+            msg.charging_sources_available = _x.charging_sources_available
+            msg.oi_mode = _x.oi_mode
+
+            msg.song_playing = bool(_x.song_playing)
+            msg.song_number = _x.song_number
+
+
+
+
+            msg.user_analog_input = int(_x.user_analog_input)
+            msg.requested_velocity = float(_x.requested_velocity) / 1000.
+            msg.requested_radius = float(_x.requested_radius) / 1000.
+            msg.requested_right_velocity = float(_x.requested_right_velocity) / 1000.
+            msg.requested_left_velocity = float(_x.requested_left_velocity) / 1000.
+
+
+
+            return msg
+        except struct.error as e:
+            # TODO(allenh1): evaluate what this looks like in ROS 2
+            # raise roslib.message.DeserializationError(e)
+            raise Exception(e)

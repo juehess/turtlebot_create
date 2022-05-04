@@ -35,40 +35,39 @@
 import rclpy
 import math
 import copy
-import PyKDL
+from tf_transformations import quaternion_from_euler
 
 from std_msgs.msg import Header
 from sensor_msgs.msg import Imu
-
+from rclpy.node import Node
+from rclpy.time import Time, Duration
 
 class TurtlebotGyro(Node):
     def __init__(self):
+        super().__init__('turtlebot_imu')
         self.cal_offset = 0.0
         self.orientation = 0.0
         self.cal_buffer =[]
         self.cal_buffer_length = 1000
-        node = rclpy.create_node('turtlebot_imu')
+        #node = rclpy.create_node('turtlebot_imu')
         self.imu_data = Imu(header=Header(frame_id="gyro_link"))
-        self.imu_data.orientation_covariance = [1e6, 0, 0, 0, 1e6, 0, 0, 0, 1e-6]
-        self.imu_data.angular_velocity_covariance = [1e6, 0, 0, 0, 1e6, 0, 0, 0, 1e-6]
-        self.imu_data.linear_acceleration_covariance = [-1,0,0,0,0,0,0,0,0]
+        self.imu_data.orientation_covariance = [1000000.0, 0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0, 0.0, 1e-6]
+        self.imu_data.angular_velocity_covariance = [1000000.0, 0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0, 0.0, 1e-6]
+        self.imu_data.linear_acceleration_covariance = [-1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
         # TODO(allenh1): use these parameters once rclpy has parameters (C turtle, probably)
+        self.gyro_measurement_range = self.declare_parameter('gyro_measurement_range', 150.0).value
+        self.gyro_scale_correction = self.declare_parameter('gyro_scale_correction', 1.35).value
         # self.gyro_measurement_range = rospy.get_param('~gyro_measurement_range', 150.0)
         # self.gyro_scale_correction = rospy.get_param('~gyro_scale_correction', 1.35)
-        self.gyro_measurement_range = 150.0
-        self.gyro_scale_correction = 1.35
-        self.imu_pub = self.create_publisher(IMU, 'imu/data')
-        self.imu_pub_raw = self.create_publisher(IMU, 'imu/raw')
-
-    def reconfigure(self, config, level):
-        self.gyro_measurement_range = config['gyro_measurement_range']
-        self.gyro_scale_correction = config['gyro_scale_correction']
-        self.get_logger().info('self.gyro_measurement_range %f' % self.gyro_measurement_range)
-        self.get_logger().info('self.gyro_scale_correction %f' % self.gyro_scale_correction)
+        #self.gyro_measurement_range = 150.0
+        #self.gyro_scale_correction = 1.35
+        self.imu_pub = self.create_publisher(Imu, 'imu/data', 10)
+        self.imu_pub_raw = self.create_publisher(Imu, 'imu/raw', 10)
 
     def update_calibration(self, sensor_state):
         #check if we're not moving and update the calibration offset
         #to account for any calibration drift due to temperature
+
         if sensor_state.requested_right_velocity == 0 and \
                sensor_state.requested_left_velocity == 0 and \
                sensor_state.distance == 0:
@@ -77,13 +76,16 @@ class TurtlebotGyro(Node):
             if len(self.cal_buffer) > self.cal_buffer_length:
                 del self.cal_buffer[:-self.cal_buffer_length]
             self.cal_offset = sum(self.cal_buffer) / len(self.cal_buffer)
+            self.get_logger().info("gyro update " + str(sum(self.cal_buffer)))
 
     def publish(self, sensor_state, last_time):
+        self.get_logger().info("gyro update")
         if self.cal_offset == 0:
             return
+        self.get_logger().info("gyro update after if")
+        current_time = Time.from_msg(sensor_state.header.stamp)
 
-        current_time = sensor_state.header.stamp
-        dt = (current_time - last_time).to_sec()
+        dt = (current_time - last_time).nanoseconds / 1e9
         past_orientation = self.orientation
         self.imu_data.header.stamp =  sensor_state.header.stamp
         self.imu_data.angular_velocity.z  = (float(sensor_state.user_analog_input)-self.cal_offset)/self.cal_offset*self.gyro_measurement_range*(math.pi/180.0)*self.gyro_scale_correction
@@ -91,7 +93,9 @@ class TurtlebotGyro(Node):
         self.imu_data.angular_velocity.z = -1.0*self.imu_data.angular_velocity.z
         self.orientation += self.imu_data.angular_velocity.z * dt
         #print orientation
-        (self.imu_data.orientation.x, self.imu_data.orientation.y, self.imu_data.orientation.z, self.imu_data.orientation.w) = PyKDL.Rotation.RotZ(self.orientation).GetQuaternion()
+   #     (self.imu_data.orientation.x, self.imu_data.orientation.y, self.imu_data.orientation.z,
+   #      self.imu_data.orientation.w) = PyKDL.Rotation.RotZ(self.orientation).GetQuaternion()
+        (self.imu_data.orientation.w, self.imu_data.orientation.x, self.imu_data.orientation.y, self.imu_data.orientation.z) = quaternion_from_euler(0.0,0.0,self.orientation)
         self.imu_pub.publish(self.imu_data)
 
         self.imu_data.header.stamp =  sensor_state.header.stamp
@@ -100,5 +104,7 @@ class TurtlebotGyro(Node):
         self.imu_data.angular_velocity.z = -1.0*self.imu_data.angular_velocity.z
         raw_orientation = past_orientation + self.imu_data.angular_velocity.z * dt
         #print orientation
-        (self.imu_data.orientation.x, self.imu_data.orientation.y, self.imu_data.orientation.z, self.imu_data.orientation.w) = PyKDL.Rotation.RotZ(raw_orientation).GetQuaternion()
+#        (self.imu_data.orientation.x, self.imu_data.orientation.y, self.imu_data.orientation.z,
+#         self.imu_data.orientation.w) = PyKDL.Rotation.RotZ(raw_orientation).GetQuaternion()
+        (self.imu_data.orientation.w, self.imu_data.orientation.x, self.imu_data.orientation.y, self.imu_data.orientation.z) = quaternion_from_euler(0.0,0.0,raw_orientation)
         self.imu_pub_raw.publish(self.imu_data)
