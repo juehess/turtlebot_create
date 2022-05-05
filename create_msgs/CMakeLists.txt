@@ -22,6 +22,7 @@ set(msg_files
   "msg/RoombaSensorState.msg"
   "msg/Turtle.msg"
   "msg/TurtlebotSensorState.msg"
+  "msg/ScanAngle.msg"
 )
 
 set(srv_files

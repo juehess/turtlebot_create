@@ -33,4 +33,8 @@ setup(
             'turtlebot_node = create_node.turtlebot_node:turtlebot_main',
         ],
     },
+    data_files=[
+        ('share/' + package_name, ['package.xml']),
+        ('share/ament_index/resource_index/packages',['resource/' + package_name]),
+    ],
 )

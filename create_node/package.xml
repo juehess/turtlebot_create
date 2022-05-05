@@ -21,7 +21,7 @@
 
   <build_depend>create_driver</build_depend>
   <build_depend>create_msgs</build_depend>
-  <!-- <build_depend>diagnostic_msgs</build_depend> -->
+  <build_depend>diagnostic_msgs</build_depend>
   <!-- <build_depend>dynamic_reconfigure</build_depend> -->
   <build_depend>geometry_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
@@ -34,9 +34,9 @@
   <build_depend>tf2_geometry_msgs</build_depend>
 
   <exec_depend>tf_transformations</exec_depend>
-<exec_depend>create_driver</exec_depend>
+  <exec_depend>create_driver</exec_depend>
   <exec_depend>create_msgs</exec_depend>
-  <!-- <exec_depend>diagnostic_msgs</exec_depend> -->
+  <exec_depend>diagnostic_msgs</exec_depend>
   <!-- <exec_depend>dynamic_reconfigure</exec_depend> -->
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>

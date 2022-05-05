@@ -76,13 +76,10 @@ class TurtlebotGyro(Node):
             if len(self.cal_buffer) > self.cal_buffer_length:
                 del self.cal_buffer[:-self.cal_buffer_length]
             self.cal_offset = sum(self.cal_buffer) / len(self.cal_buffer)
-            self.get_logger().info("gyro update " + str(sum(self.cal_buffer)))
 
     def publish(self, sensor_state, last_time):
-        self.get_logger().info("gyro update")
         if self.cal_offset == 0:
             return
-        self.get_logger().info("gyro update after if")
         current_time = Time.from_msg(sensor_state.header.stamp)
 
         dt = (current_time - last_time).nanoseconds / 1e9
