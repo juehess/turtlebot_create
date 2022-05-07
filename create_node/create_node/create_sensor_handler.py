@@ -92,9 +92,10 @@ class TurtlebotSensorStateMsg():
 
 
 class CreateSensorHandler(object):
-    def __init__(self, robot):
+    def __init__(self, robot, node):
         self.robot = robot
-        self.node = Node('SensorHandlerNode')
+        #self.node = Node('SensorHandlerNode')
+        self.node = node
 
     def request_packet(self, packet_id):
         """Reqeust a sensor packet."""
@@ -115,7 +116,7 @@ class CreateSensorHandler(object):
         #self.node.get_logger().info("buffer: '%s'" % buff)
         if buff:
             self.deserialize(sensor_state, buff, timestamp)
-            self.node.get_logger().info("charging state: " +str(sensor_state.user_analog_input))
+            #self.node.get_logger().info("charging state: " +str(sensor_state.user_analog_input))
 
     def deserialize(self, msg, buff, timestamp):
         """

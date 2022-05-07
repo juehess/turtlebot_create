@@ -37,9 +37,9 @@ from rclpy.node import Node
 from rclpy.time import Time, Duration
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
-class TurtlebotDiagnostics(Node):
-    def __init__(self):
-        super().__init__('turtlebot_diagnostics')
+class TurtlebotDiagnostics():
+    def __init__(self, node):
+        self.node = node
         self.charging_state =  {0:"Not Charging",
                                 1:"Reconditioning Charging",
                                 2:"Full Charging",
@@ -54,11 +54,12 @@ class TurtlebotDiagnostics(Node):
         self.oi_mode = {1:"Passive",
                         2:"Safe",
                         3:"Full"}
-        self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
-        self.last_diagnostics_time = self.get_clock().now()
+        self.diag_pub = node.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.last_diagnostics_time = self.node.get_clock().now()
+
 
     def node_status(self, msg, status):
-        curr_time = self.get_clock().now()
+        curr_time = self.node.get_clock().now()
         diag = DiagnosticArray()
         diag.header.stamp = Time.to_msg(curr_time)
         stat = DiagnosticStatus()
@@ -93,7 +94,7 @@ class TurtlebotDiagnostics(Node):
         except KeyError as ex:
             stat.level=DiagnosticStatus.ERROR
             stat.message = "Invalid OI Mode Reported %s"%ex
-            self.get_logger().warn(stat.message)
+            self.node.get_logger().warn(stat.message)
         diag.status.append(stat)
         
         #battery info
@@ -118,7 +119,7 @@ class TurtlebotDiagnostics(Node):
         except KeyError as ex:
             stat.level=DiagnosticStatus.ERROR
             stat.message = "Invalid Charging Source %s, actual value: %i"%(ex,sensor_state.charging_sources_available)
-            self.get_logger().warn(stat.message)
+            self.node.get_logger().warn(stat.message)
         diag.status.append(stat)
         #cliff sensors
         stat = DiagnosticStatus(name="Cliff Sensor", level=DiagnosticStatus.OK, message="OK")

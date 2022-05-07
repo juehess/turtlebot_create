@@ -42,27 +42,22 @@ from sensor_msgs.msg import Imu
 from rclpy.node import Node
 from rclpy.time import Time, Duration
 
-class TurtlebotGyro(Node):
-    def __init__(self):
-        super().__init__('turtlebot_imu')
+class TurtlebotGyro():
+    def __init__(self,node):
         self.cal_offset = 0.0
         self.orientation = 0.0
         self.cal_buffer =[]
         self.cal_buffer_length = 1000
-        #node = rclpy.create_node('turtlebot_imu')
+
         self.imu_data = Imu(header=Header(frame_id="gyro_link"))
         self.imu_data.orientation_covariance = [1000000.0, 0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0, 0.0, 1e-6]
         self.imu_data.angular_velocity_covariance = [1000000.0, 0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0, 0.0, 1e-6]
         self.imu_data.linear_acceleration_covariance = [-1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
         # TODO(allenh1): use these parameters once rclpy has parameters (C turtle, probably)
-        self.gyro_measurement_range = self.declare_parameter('gyro_measurement_range', 150.0).value
-        self.gyro_scale_correction = self.declare_parameter('gyro_scale_correction', 1.35).value
-        # self.gyro_measurement_range = rospy.get_param('~gyro_measurement_range', 150.0)
-        # self.gyro_scale_correction = rospy.get_param('~gyro_scale_correction', 1.35)
-        #self.gyro_measurement_range = 150.0
-        #self.gyro_scale_correction = 1.35
-        self.imu_pub = self.create_publisher(Imu, 'imu/data', 10)
-        self.imu_pub_raw = self.create_publisher(Imu, 'imu/raw', 10)
+        self.gyro_measurement_range = node.declare_parameter('gyro_measurement_range', 150.0).value
+        self.gyro_scale_correction = node.declare_parameter('gyro_scale_correction', 1.35).value
+        self.imu_pub = node.create_publisher(Imu, 'imu/data', 10)
+        self.imu_pub_raw = node.create_publisher(Imu, 'imu/raw', 10)
 
     def update_calibration(self, sensor_state):
         #check if we're not moving and update the calibration offset

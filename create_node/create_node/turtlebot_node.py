@@ -33,9 +33,6 @@
 #
 # Revision $Id: __init__.py 11217 2010-09-23 21:08:11Z kwc $
 
-# TODO(allenh1): whaaaaat
-# import roslib; roslib.load_manifest('create_node')
-
 """
 ROS Turtlebot node for ROS built on top of create_driver's
 turtlebot implementation. This driver is based on
@@ -54,13 +51,13 @@ import time
 
 from math import sin, cos
 
-# TODO(allenh1): is this needed for something?
-# import rospkg
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
 from rclpy.duration import Duration
 import tf2_ros
+from rcl_interfaces.msg import SetParametersResult
+from rclpy.parameter import Parameter
 
 from geometry_msgs.msg import Point, Pose, Pose2D, PoseWithCovariance, \
     Quaternion, Twist, TwistWithCovariance, Vector3, TransformStamped
@@ -80,7 +77,7 @@ class TurtlebotNode(Node):
     _SENSOR_READ_RETRY_COUNT = 5
 
     def __init__(self, default_port='/dev/ttyUSB0', default_update_rate=60.0):
-        super().__init__('turtlebot')
+        super().__init__('turtlebot_node')
         """
         @param default_port: default tty port to use for establishing
             connection to Turtlebot.  This will be overriden by ~port ROS
@@ -99,11 +96,10 @@ class TurtlebotNode(Node):
 
         self._pos2d = Pose2D() # 2D pose for odometry
 
-        self._diagnostics = TurtlebotDiagnostics()
-#        self.has_gyro = False
+        self._diagnostics = TurtlebotDiagnostics(self)
         if self.has_gyro:
             from create_node.gyro import TurtlebotGyro
-            self._gyro = TurtlebotGyro()
+            self._gyro = TurtlebotGyro(self)
         else:
             self._gyro = None
         self.create_timer(1.0 / self.update_rate, self.spin)
@@ -111,22 +107,21 @@ class TurtlebotNode(Node):
         # dynamic_reconfigure.server.Server(TurtleBotConfig, self.reconfigure)
 
     def start(self):
-        log_once = True
+
         while rclpy.ok():
             try:
                 self.robot.start(self.port, robot_types.ROBOT_TYPES[self.robot_type].baudrate)
                 break
             except serial.serialutil.SerialException as ex:
                 msg = "Failed to open port %s. Error: %s Please make sure the Create cable is plugged into the computer. \n"%((self.port), ex)
-                # self._diagnostics.node_status(msg,"error")
+                self._diagnostics.node_status(msg,"error")
                 self.get_logger().error(msg)
                 time.sleep(3.0)
 
-        self.sensor_handler = robot_types.ROBOT_TYPES[self.robot_type].sensor_handler(self.robot)
+        self.sensor_handler = robot_types.ROBOT_TYPES[self.robot_type].sensor_handler(self.robot, self)
         self.robot.safe = True
 
-        if self.declare_parameter('bonus', False).value:        # TODO(allenh1): Enable gyro when possible (port PyKDL)
-
+        if self.declare_parameter('bonus', False).value:
             bonus(self.robot)
 
         self.robot.control()
@@ -150,7 +145,7 @@ class TurtlebotNode(Node):
         self.update_rate = self.declare_parameter('update_rate', self.default_update_rate).value
         self.drive_mode = self.declare_parameter('drive_mode', 'twist').value
         self.has_gyro = self.declare_parameter('has_gyro', True).value
-        self.odom_angular_scale_correction = self.declare_parameter(
+        self.odom_angular_scale_correction  = self.declare_parameter(
             'odom_angular_scale_correction', 1.0
         ).value
         self.odom_linear_scale_correction = self.declare_parameter(
@@ -173,6 +168,8 @@ class TurtlebotNode(Node):
         self.get_logger().info("update_rate: '%s'" % (self.update_rate))
         self.get_logger().info("drive mode: '%s'" % (self.drive_mode))
         self.get_logger().info("has gyro: '%s'" % (self.has_gyro))
+
+        self.add_on_set_parameters_callback(self.parameter_callback)
 
     def _init_pubsub(self):
         # create publishers
@@ -207,19 +204,34 @@ class TurtlebotNode(Node):
         if self.publish_tf:
             self.transform_broadcaster = tf2_ros.TransformBroadcaster(self)
 
-    def reconfigure(self, config, level):
-        self.update_rate = config['update_rate']
-        self.drive_mode = config['drive_mode']
-        self.has_gyro = config['has_gyro']
-        if self.has_gyro:
-            self._gyro.reconfigure(config, level)
-        self.odom_angular_scale_correction = config['odom_angular_scale_correction']
-        self.odom_linear_scale_correction = config['odom_linear_scale_correction']
-        self.cmd_vel_timeout = rclpy.Duration(config['cmd_vel_timeout'])
-        self.stop_motors_on_bump = config['stop_motors_on_bump']
-        self.min_abs_yaw_vel = config['min_abs_yaw_vel']
-        self.max_abs_yaw_vel = config['max_abs_yaw_vel']
-        return config
+    def parameter_callback(self, params):
+        for param in params:
+            if param.name == 'update_rate' and param.type_ == Parameter.Type.DOUBLE:
+                self.update_rate = param.value
+            if param.name == 'drive_mode' and param.type_ == Parameter.Type.STRING:
+                self.drive_mode = param.value
+            if param.name == 'odom_angular_scale_correction' and param.type_ == Parameter.Type.DOUBLE:
+                self.odom_angular_scale_correction = param.value
+            if param.name == 'odom_linear_scale_correction' and param.type_ == Parameter.Type.DOUBLE:
+               self.odom_linear_scale_correction = param.value
+            if param.name == 'stop_motors_on_bump' and param.type_ == Parameter.Type.BOOL:
+               self.stop_motors_on_bump = param.value
+            if param.name == 'cmd_vel_timeout' and param.type_ == Parameter.Type.DOUBLE:
+               self.cmd_vel_timeout = rclpy.Duration(param.value)
+            if param.name == 'min_abs_yaw_vel' and param.type_ == Parameter.Type.DOUBLE:
+               self.min_abs_yaw_vel = param.value
+            if param.name == 'max_abs_yaw_vel' and param.type_ == Parameter.Type.DOUBLE:
+               self.max_abs_yaw_vel = param.value
+
+        #TODO: GYRO Juergen
+        #        self.has_gyro = config['has_gyro']
+        #        if self.has_gyro:
+        #            self._gyro.reconfigure(config, level)
+
+
+        return SetParametersResult(successful=True)
+
+
 
     def cmd_vel(self, msg):
         # Clamp to min abs yaw velocity, to avoid trying to rotate at low
@@ -248,23 +260,27 @@ class TurtlebotNode(Node):
             # convert twist to drive args, m->mm (velocity, radius)
             self.req_cmd_vel = msg.velocity * 1000, msg.radius * 1000
 
-    def set_operation_mode(self,req):
+    def set_operation_mode(self, request, response):
+        response.valid_mode = True
+
         if not self.robot.sci:
             self.get_logger().warn("Create : robot not connected yet, sci not available")
-            return SetTurtlebotModeResponse(False)
+            response.valid_mode = False
+            return response
 
-        self.operate_mode = req.mode
+        self.operate_mode = request.mode
 
-        if req.mode == 1: #passive
+        if request.mode == 1: #passive
             self._robot_run_passive()
-        elif req.mode == 2: #safe
+        elif request.mode == 2: #safe
             self._robot_run_safe()
-        elif req.mode == 3: #full
+        elif request.mode == 3: #full
             self._robot_run_full()
         else:
             self.get_logger().error("Requested an invalid mode.")
-            return SetTurtlebotModeResponse(False)
-        return SetTurtlebotModeResponse(True)
+            response.valid_mode = False
+            return response
+        return response
 
     def _robot_run_passive(self):
         """
@@ -279,7 +295,8 @@ class TurtlebotNode(Node):
         """
         Perform a soft-reset of the Create
         """
-        self.get_logger().dbg("Soft-rebooting turtlebot to passive mode.")
+        msg="Soft-rebooting turtlebot to passive mode."
+        self.get_logger().dbg(msg)
         self._diagnostics.node_status(msg,"warn")
         self._set_digital_outputs([0, 0, 0])
         self.robot.soft_reset()
@@ -315,13 +332,14 @@ class TurtlebotNode(Node):
         self.robot.set_digital_outputs(byte)
         self.sensor_state.user_digital_outputs = byte
 
-    def set_digital_outputs(self,req):
+    def set_digital_outputs(self,request, response):
         if not self.robot.sci:
             raise Exception("Robot not connected, SCI not available")
 
-        outputs = [req.digital_out_0,req.digital_out_1, req.digital_out_2]
+        outputs = [request.digital_out_0,request.digital_out_1, request.digital_out_2]
         self._set_digital_outputs(outputs)
-        return SetDigitalOutputsResponse(True)
+        response.done=True
+        return response
 
     def sense(self, sensor_state):
         self.sensor_handler.get_all(sensor_state)

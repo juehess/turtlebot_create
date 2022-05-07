@@ -46,7 +46,7 @@ class RoombaSensorHandler(object):
 
   ROOMBA_PULSES_TO_M = 0.000445558279992234
     
-  def __init__(self, robot):
+  def __init__(self, robot, node):
     self._robot = robot
     self._sensor_state_struct = struct.Struct(">12B2hBHhb7HBH5B4h2HB6H2B4hb")
     self._last_encoder_counts = None
@@ -61,6 +61,7 @@ class RoombaSensorHandler(object):
       #observation, we are preferring the 'before' stamp rather than
       #after.
       stamp = time.time()
+      stamp = self.node.get_clock().now()
       length = create_driver.SENSOR_GROUP_PACKET_LENGTHS[packet_id]
       return self._robot.sci.read(length), stamp
 
